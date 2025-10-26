@@ -1,4 +1,7 @@
 *.npz
 __pycache__/
+*__pycache__/
 venv/
 .venv/
+
+!phase_change_data/*.npz
