@@ -223,7 +223,9 @@ def optimize_vectorized(configs, feature_probs, importances,
                         print_freq=100, 
                         lr=1e-3, 
                         lr_scale=constant_lr, 
-                        hooks=[]):
+                        hooks=[],
+                        init_fn=None,
+                        on_initialized=None):
     
     func_models = []
     all_params = []
@@ -237,6 +239,15 @@ def optimize_vectorized(configs, feature_probs, importances,
 
     stacked_params = stack_state_dicts(all_params)
     stacked_buffers = stack_state_dicts(all_buffers)
+
+    # Optional: allow caller to initialize/modify stacked parameters before training
+    if init_fn is not None:
+        with torch.no_grad():
+            init_fn(stacked_params)
+
+    # Allow caller to snapshot weights before training begins
+    if on_initialized is not None:
+        on_initialized(stacked_params, configs, feature_probs, importances)
 
     flat_params = list(stacked_params.values())
     
@@ -255,7 +266,7 @@ def optimize_vectorized(configs, feature_probs, importances,
         # use the first func_model since they should all have the same signature
         out, load_balance_loss = vectorized_forward(stacked_params, stacked_buffers, batch, func_models[0])
 
-        stacked_importance = torch.stack(importances)
+        stacked_importance = torch.stack([imp.to(device) for imp in importances])
         error = stacked_importance.unsqueeze(1) * (batch.abs() - out)**2
 
         reconstruction_losses = einops.reduce(error, 'models b f -> models', 'mean')

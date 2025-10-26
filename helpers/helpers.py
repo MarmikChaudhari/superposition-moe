@@ -330,6 +330,35 @@ def compute_all_expert_probabilities(gate_matrix, feature_probability=None, n_sa
     
     return probs_with_data, probs_without_data
 
+###### Initialization callback ######
+def my_gate_init(stacked_params):
+    # stacked_params["gate"]: [N, n_experts, n_features]
+    gate = stacked_params["gate"]
+    N_local, n_experts, n_features = gate.shape
+    print(f"N LOCAL: {N_local}")
+    for i in range(N_local):
+        if i < int(N_local / 2):
+            torch.nn.init.xavier_normal_(gate[i])
+            print(gate[i])
+        else:
+            gate[i].zero_()
+            indices = np.random.choice(n_features, size=n_features, replace=False)
+            indices = torch.from_numpy(indices.reshape(n_experts, -1)).to(gate.device)
+            for j in range(n_experts):
+                gate[i, j, indices[j]] = 1.0
+            print(gate[i])
+
+###### Saving initial model weights #######
+def save_initial_weights(stacked_params, configs, feature_probs, importances, save_path):
+    snapshot = {
+        "configs": configs,
+        "feature_probs": [fp if torch.is_tensor(fp) else torch.tensor(fp) for fp in feature_probs],
+        "importances": [imp.detach().cpu() for imp in importances],
+        "stacked_params": {k: v.detach().cpu().clone() for k, v in stacked_params.items()},
+    }
+    torch.save(snapshot, "models/initial_vectorized_weights.pt")
+    print("Saved initial weights to initial_vectorized_weights.pt")
+
 
 # Tools to track gate expert selection statistics (during training)
 # Currently only works for k=1
